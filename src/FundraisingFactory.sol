@@ -5,9 +5,10 @@ import {FundraisingProject} from "src/FundraisingProject.sol";
 import {Ownable} from "../lib/openzeppelin-contracts/contracts/access/Ownable.sol";
 
 contract FundraisingFactory is Ownable {
-    address public usdtContract;
+    address public immutable usdtContract;
+    uint256 public creationFee;
 
-    address [] public projectList;
+    address[] public projectList;
 
     event ProjectCreated(
         address indexed projectAddress,
@@ -16,37 +17,58 @@ contract FundraisingFactory is Ownable {
         uint256 deadline
     );
 
-    constructor(address _usdtContract) Ownable(msg.sender){
+    constructor(
+        address _usdtContract,
+        uint256 _initialFee
+    ) Ownable(msg.sender) {
         usdtContract = _usdtContract;
+        creationFee = _initialFee;
+    }
+
+    function setCreationFee(uint256 _newFee) external onlyOwner {
+        creationFee = _newFee;
     }
 
     function createNewFundraisingProject(
-        address _projectOwner,
-        uint256 _targetAmount, 
+        uint256 _targetAmount,
         uint256 _durationInDays
-    ) external {
-        require(_projectOwner != address(0), "Factory: Project owner cannot be the zero address");
-        require(_targetAmount > 0, "Factory: Target amount must be greater than zero");
-        require(_durationInDays > 0, "Factory: Duration must be greater than zero");
+    ) external payable {
+        require(msg.value == creationFee, "Factory: Incorrect creation fee");
+        require(
+            _targetAmount > 0,
+            "Factory: Target amount must be greater than zero"
+        );
+        require(
+            _durationInDays > 0,
+            "Factory: Duration must be greater than zero"
+        );
 
         FundraisingProject newProject = new FundraisingProject(
-            _projectOwner,
+            msg.sender,
             _targetAmount,
             _durationInDays,
             usdtContract
         );
+
         address newProjectAddress = address(newProject);
         projectList.push(newProjectAddress);
 
         emit ProjectCreated(
             newProjectAddress,
-            _projectOwner,
+            msg.sender,
             _targetAmount,
-            newProject.getDeadline() // Asumsi ada fungsi getDeadline() di FundraisingProject
+            newProject.getDeadline()
         );
     }
 
-    function getAllProjects() public view returns (address[] memory){
+    function withdraw() external onlyOwner {
+        (bool success, ) = payable(owner()).call{value: address(this).balance}(
+            ""
+        );
+        require(success, "Factory: Transfer failed");
+    }
+
+    function getAllProjects() public view returns (address[] memory) {
         return projectList;
     }
 
