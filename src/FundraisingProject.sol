@@ -28,6 +28,8 @@ contract FundraisingProject is Ownable {
     uint256 public contributorsCount = 0;
 
     //Data untuk melakukan voting milestone withdraw
+    //Data untuk melakukan voting milestone withdraw
+    uint256 public votingPeriod = 7 days;
     uint256 public votePeriode;
     bool votingStart = false;
     mapping(uint8 => uint256) public percentageVoteAmount;
@@ -72,6 +74,7 @@ contract FundraisingProject is Ownable {
     event Refund(address indexed contributor, uint256 amount);
     event Voting(address indexed voter, uint8 percentage);
     event PercentageDecided(uint8 percentage);
+    event VotingPeriodChanged(uint256 newPeriod);
 
     constructor(
         address _projectOwner,
@@ -126,9 +129,11 @@ contract FundraisingProject is Ownable {
 
         fundWithdrawn = true;
 
-        usdtToken.safeTransfer(projectOwner, amountRaised);
+        uint256 withdrawAmount = (percentageWithdraw * amountRaised) / 100;
 
-        emit FundWidthdrawn(projectOwner, amountRaised);
+        usdtToken.safeTransfer(projectOwner, withdrawAmount);
+
+        emit FundWidthdrawn(projectOwner, withdrawAmount);
     }
 
     /*
@@ -156,11 +161,32 @@ contract FundraisingProject is Ownable {
         fundsRefunded = true;
     }
 
+    /*
+        Function untuk memulai proses voting persentase milestone.
+        Bisa diakses siapa saja setelah waktu fundraising selesai.
+    */
     function startVoting() external hasEnded {
-        votePeriode = block.timestamp + 7 days;
+        votePeriode = block.timestamp + votingPeriod;
         votingStart = true;
     }
 
+    /*
+        Function untuk mengubah periode voting.
+        Hanya bisa diakses oleh project owner.
+    */
+    function setVotingPeriod(
+        uint256 _newPeriodInDays
+    ) external onlyProjectOwner {
+        require(_newPeriodInDays > 0, "Voting period must be greater than 0");
+        votingPeriod = _newPeriodInDays * 1 days;
+        emit VotingPeriodChanged(votingPeriod);
+    }
+
+    /* 
+        Function untuk melakukan voting persentase milestone.
+        Menerima persentase piihan voter.
+        Hanya bisa diakses oleh contributor dan setelah waktu fundraising berakhir.
+    */
     function vote(
         uint8 _votedPercentage
     ) external hasEnded isContributors alreadyVoted {
@@ -170,6 +196,11 @@ contract FundraisingProject is Ownable {
         emit Voting(msg.sender, _votedPercentage);
     }
 
+    /*
+        Function untuk menetapkan persentase yang akan diterapkan.
+        Bisa diakses oleh siapa saja
+        Hanya bisa diakses saat masa voting telah berakhir.
+    */
     function decideWithdrawPercentage() external {
         require(block.timestamp > votePeriode, "Vote periode still on going.");
         uint256 maxVoted = 0;
